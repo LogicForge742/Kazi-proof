@@ -1,3 +1,4 @@
+-- Milestones track work units; ledger rows record each related PayPal action.
 CREATE TABLE IF NOT EXISTS jobs (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,

@@ -1,13 +1,16 @@
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: kazi
       POSTGRES_PASSWORD: kazi
-      POSTGRES_DB: kazi
-    ports: ["5432:5432"]
+      POSTGRES_DB: kazi_proof
+    ports:
+      # Use a non-default host port to avoid conflicts with local PostgreSQL.
+      - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      # Keep database files between container restarts.
+      - dbdata:/var/lib/postgresql/data
 volumes:
-  pgdata:
+  dbdata:

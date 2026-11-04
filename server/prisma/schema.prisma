@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  WORKER
+}
+
+enum JobStatus {
+  DRAFT
+  AWAITING_FUNDING
+  FUNDED
+  COMPLETED
+  CANCELLED
+}
+
+/// Milestone lifecycle; the server validates transitions before changing status.
+enum MilestoneStatus {
+  PLANNED
+  ACTIVE
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  RELEASED
+  FLAGGED
+  DISPUTED
+}
+
+enum Verdict {
+  MATCHES
+  MISMATCH
+  UNCLEAR
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  name         String
+  role         Role
+  passwordHash String
+  createdAt    DateTime          @default(now())
+  clientJobs   Job[]             @relation("ClientJobs")
+  workerJobs   Job[]             @relation("WorkerJobs")
+  reputation   ReputationEvent[]
+}
+
+model Job {
+  id               String            @id @default(cuid())
+  title            String
+  description      String
+  status           JobStatus         @default(DRAFT)
+  clientId         String
+  workerId         String?
+  client           User              @relation("ClientJobs", fields: [clientId], references: [id])
+  worker           User?             @relation("WorkerJobs", fields: [workerId], references: [id])
+  siteLat          Float?
+  siteLng          Float?
+  totalAmount      Decimal           @db.Decimal(10, 2)
+  currency         String            @default("USD")
+  autoApproveLimit Decimal           @default(0) @db.Decimal(10, 2)
+  paypalOrderId    String?
+  paypalAuthId     String?
+  createdAt        DateTime          @default(now())
+  milestones       Milestone[]
+  reputation       ReputationEvent[]
+}
+
+model Milestone {
+  id            String          @id @default(cuid())
+  jobId         String
+  job           Job             @relation(fields: [jobId], references: [id])
+  position      Int
+  title         String
+  amount        Decimal         @db.Decimal(10, 2)
+  criteria      String
+  challengeCode String?
+  status        MilestoneStatus @default(PLANNED)
+  submissions   Submission[]
+  payment       Payment?
+}
+
+model Submission {
+  /// Evidence and capture metadata submitted for a milestone review.
+  id          String     @id @default(cuid())
+  milestoneId String
+  milestone   Milestone  @relation(fields: [milestoneId], references: [id])
+  photoPath   String
+  capturedAt  DateTime
+  lat         Float?
+  lng         Float?
+  distanceM   Float?
+  exif        Json?
+  phash       String?
+  flags       String[]
+  createdAt   DateTime   @default(now())
+  reports     AiReport[]
+}
+
+model AiReport {
+  /// AI output is advisory; backend rules determine approval and payment.
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id])
+  verdict      Verdict
+  confidence   Float
+  summary      String
+  raw          Json?
+  createdAt    DateTime   @default(now())
+}
+
+model Payment {
+  /// A milestone has at most one payment record; provider IDs track its transactions.
+  id          String    @id @default(cuid())
+  milestoneId String    @unique
+  milestone   Milestone @relation(fields: [milestoneId], references: [id])
+  captureId   String?
+  payoutId    String?
+  amount      Decimal   @db.Decimal(10, 2)
+  status      String
+  createdAt   DateTime  @default(now())
+}
+
+model ReputationEvent {
+  id        String   @id @default(cuid())
+  workerId  String
+  worker    User     @relation(fields: [workerId], references: [id])
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id])
+  outcome   String
+  createdAt DateTime @default(now())
+}

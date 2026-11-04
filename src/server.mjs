@@ -6,6 +6,7 @@ const app = express();
 app.use(express.json());
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
+// Route handlers share one error path for logging and JSON error responses.
 const h = (fn) => (req, res) => fn(req, res).catch((e) => {
   console.error(e.data || e);
   res.status(500).json({ error: e.message, detail: e.data });
@@ -39,6 +40,7 @@ app.get("/paypal/return", h(async (req, res) => {
   const job = await getJob(req.query.job);
   if (!job || job.order_id !== req.query.token) return res.sendStatus(400);
   if (job.status === "DRAFT") {
+    // Keep the authorization ID so later milestone captures use the same authorization.
     const auth = await pp.authorizeOrder(job.order_id);
     const authId = auth.purchase_units[0].payments.authorizations[0].id;
     await q("UPDATE jobs SET auth_id=$1, expires_at=now() + interval '29 days', status='FUNDED' WHERE id=$2",
@@ -56,6 +58,7 @@ app.post("/milestones/:id/release", h(async (req, res) => {
     return res.status(409).json({ error: "not releasable" });
 
   if (m.status === "PENDING") {
+    // Mark the last milestone capture as final so PayPal closes the authorization.
     const { c } = await one("SELECT COUNT(*)::int c FROM milestones WHERE job_id=$1 AND status='PENDING'", [job.id]);
     const cap = await pp.capture(job.auth_id, m.amount, c === 1, `release-${m.id}`);
     await log(job.id, m.id, "CAPTURE", m.amount, cap.id);

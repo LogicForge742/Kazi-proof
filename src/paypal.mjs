@@ -1,5 +1,6 @@
 const BASE = "https://api-m.sandbox.paypal.com";
 
+// Exchange the app credentials for a short-lived access token used by API calls.
 async function token() {
   const a = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_SECRET}`).toString("base64");
   const r = await fetch(`${BASE}/v1/oauth2/token`, {
@@ -25,6 +26,7 @@ async function call(path, body, requestId) {
   return data;
 }
 
+// Jobs use an authorization so milestone amounts can be captured separately later.
 export const createOrder = (total, returnUrl, cancelUrl) =>
   call("/v2/checkout/orders", {
     intent: "AUTHORIZE",

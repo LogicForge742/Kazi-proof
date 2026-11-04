@@ -53,6 +53,7 @@ if (mode === 'finish') {
   console.log('AUTH ID:', authId, 'STATUS:', a.json.status);
   if (!authId) { console.log(JSON.stringify(a.json, null, 2)); process.exit(1); }
 
+  // Exercise multiple partial captures before checking the authorization's final status.
   for (const n of [1, 2]) {
     const c = await call(tok, 'POST', `/v2/payments/authorizations/${authId}/capture`, {
       amount: { currency_code: 'USD', value: '30.00' },
