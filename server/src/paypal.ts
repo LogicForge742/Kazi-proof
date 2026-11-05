@@ -44,7 +44,7 @@ export async function createAuthorizeOrder(amount: string, currency: string, job
     intent: 'AUTHORIZE',
     purchase_units: [{ reference_id: jobId, amount: { currency_code: currency, value: amount } }],
     payment_source: {
-      paypal: { experience_context: { return_url: `${web}/return`, cancel_url: `${web}/cancel` } },
+      paypal: { experience_context: { return_url: `${web}/paypal/return?jobId=${jobId}`, cancel_url: `${web}/jobs` } },
     },
   });
   const link = j.links?.find((l: any) => l.rel === 'payer-action' || l.rel === 'approve');

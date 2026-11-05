@@ -2,11 +2,12 @@ import { Router, Request } from 'express';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
-import { MilestoneStatus as S, Role } from '@prisma/client';
+import { MilestoneStatus as S, Role, Verdict } from '@prisma/client';
 import { prisma } from './db';
 import { requireAuth } from './auth';
 import { assertTransition } from './stateMachine';
 import { capturePartial, sendPayout } from './paypal';
+import { verifyPhoto } from './verify';
 
 export const milestonesRouter = Router();
 
@@ -138,6 +139,19 @@ milestonesRouter.post('/:id/submit', requireAuth(Role.WORKER), async (req, res) 
   if (buf.length === 0 || buf.length > 8 * 1024 * 1024) {
     return res.status(400).json({ error: 'Photo is empty or larger than 8 MB' });
   }
+  let aiVerdict: string | null = null;
+  let aiReason: string | null = null;
+  let aiConfidence: number | null = null;
+  try {
+    const v = await verifyPhoto(m.criteria, raw);
+    aiVerdict = v.verdict;
+    aiReason = v.reason;
+    aiConfidence = v.confidence;
+    if (v.verdict === 'NO_MATCH') flags.push('AI_NO_MATCH');
+  } catch (e) {
+    console.error('photo check failed:', (e as Error).message);
+  }
+
   const dir = path.join(__dirname, '..', 'uploads');
   fs.mkdirSync(dir, { recursive: true });
   const file = `${m.id}-${Date.now()}.jpg`;
@@ -155,11 +169,27 @@ milestonesRouter.post('/:id/submit', requireAuth(Role.WORKER), async (req, res) 
     },
   });
 
+  if (aiVerdict && aiReason != null && aiConfidence != null) {
+    const verdictMap: Record<string, Verdict> = { MATCH: 'MATCHES', PARTIAL: 'UNCLEAR', NO_MATCH: 'MISMATCH' };
+    try {
+      await prisma.aiReport.create({
+        data: {
+          submissionId: submission.id,
+          verdict: verdictMap[aiVerdict],
+          confidence: aiConfidence,
+          summary: aiReason,
+        },
+      });
+    } catch (e) {
+      console.error('saving AI report failed:', (e as Error).message);
+    }
+  }
+
   await setStatus(m.id, m.status, 'SUBMITTED');
   const next: S = flags.length ? 'FLAGGED' : 'UNDER_REVIEW';
   await setStatus(m.id, 'SUBMITTED', next);
 
-  res.status(201).json({ submissionId: submission.id, status: next, flags, distanceM });
+  res.status(201).json({ submissionId: submission.id, status: next, flags, distanceM, aiVerdict, aiReason });
 });
 
 // Client approves: money moves only here (or on /release retry), never on an AI verdict alone.
@@ -197,12 +227,29 @@ milestonesRouter.post('/:id/dispute', requireAuth(Role.CLIENT), async (req, res)
   res.json({ id: m.id, status: 'DISPUTED' });
 });
 
+// Newest photo for a milestone. Only the job's client or worker may see it.
+milestonesRouter.get('/:id/photo', requireAuth(), async (req, res) => {
+  const m = await loadMilestone(idOf(req), req.user!.id);
+  if (!m) return res.status(404).json({ error: 'Milestone not found' });
+  const sub = await prisma.submission.findFirst({
+    where: { milestoneId: m.id },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!sub) return res.status(404).json({ error: 'No photo submitted yet' });
+  const uploads = path.join(__dirname, '..', 'uploads');
+  const file = path.join(__dirname, '..', sub.photoPath);
+  if (!file.startsWith(uploads) || !fs.existsSync(file)) {
+    return res.status(404).json({ error: 'Photo file not found' });
+  }
+  res.sendFile(file);
+});
+
 milestonesRouter.get('/:id', requireAuth(), async (req, res) => {
   const m = await loadMilestone(idOf(req), req.user!.id);
   if (!m) return res.status(404).json({ error: 'Milestone not found' });
   const full = await prisma.milestone.findUnique({
     where: { id: m.id },
-    include: { submissions: { orderBy: { createdAt: 'desc' } }, payment: true },
+    include: { submissions: { orderBy: { createdAt: 'desc' }, include: { reports: true } }, payment: true },
   });
   res.json({ milestone: full });
 });

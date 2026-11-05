@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 import { prisma } from './db';
 import { requireAuth } from './auth';
 import { createAuthorizeOrder, authorizeOrder } from './paypal';
+import { scopeJob } from './scoping';
 
 export const jobsRouter = Router();
 
@@ -120,4 +121,23 @@ jobsRouter.post('/:id/confirm-funding', requireAuth(Role.CLIENT), async (req, re
     include: { milestones: { orderBy: { position: 'asc' } } },
   });
   res.json({ job: updated });
+});
+
+const scopeInput = z.object({
+  description: z.string().min(10).max(2000),
+  totalAmount: z.number().positive().max(5000),
+});
+
+// Preview only: nothing is saved and no money moves.
+jobsRouter.post('/scope', requireAuth(Role.CLIENT), async (req, res) => {
+  const p = scopeInput.safeParse(req.body);
+  if (!p.success) {
+    return res.status(400).json({ error: 'Describe the job (10+ characters) and give a total up to 5000' });
+  }
+  try {
+    res.json({ plan: await scopeJob(p.data.description, p.data.totalAmount) });
+  } catch (e) {
+    console.error('scoping failed:', (e as Error).message);
+    res.status(502).json({ error: 'AI scoping failed, please try again' });
+  }
 });
