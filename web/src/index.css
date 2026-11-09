@@ -1,1 +1,26 @@
 @import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/figtree";
+
+@theme {
+  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
+  --font-sans: "Figtree Variable", system-ui, sans-serif;
+
+  --color-ink: #14211B;
+  --color-paper: #F2F4F1;
+  --color-line: #D9DED9;
+  --color-muted: #5F6B64;
+
+  --color-kazi: #0E7A57;
+  --color-kazi-dark: #0B6548;
+  --color-move: #B87503;
+  --color-move-soft: #FBEFD3;
+  --color-prob: #B3412E;
+  --color-prob-soft: #F6DED9;
+}
+
+@layer base {
+  body { @apply bg-paper text-ink font-sans antialiased; }
+  h1, h2, h3 { @apply font-display tracking-tight; }
+  :focus-visible { outline: 2px solid var(--color-move); outline-offset: 2px; }
+}

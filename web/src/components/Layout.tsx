@@ -1,0 +1,27 @@
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+
+export default function Layout({
+  children,
+  right,
+}: {
+  children: ReactNode;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3">
+          <Link to="/" className="flex items-center gap-2 text-lg font-bold">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white">
+              K
+            </span>
+            Kazi-proof
+          </Link>
+          <div className="flex items-center gap-3 text-sm text-muted">{right}</div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-3xl px-4 py-8">{children}</main>
+    </div>
+  );
+}
