@@ -8,6 +8,7 @@ import { requireAuth } from './auth';
 import { assertTransition } from './stateMachine';
 import { capturePartial, sendPayout } from './paypal';
 import { verifyPhoto } from './verify';
+import { loadCloudinaryPhoto, storePhoto } from './photoStorage';
 
 export const milestonesRouter = Router();
 
@@ -152,15 +153,13 @@ milestonesRouter.post('/:id/submit', requireAuth(Role.WORKER), async (req, res) 
     console.error('photo check failed:', (e as Error).message);
   }
 
-  const dir = path.join(__dirname, '..', 'uploads');
-  fs.mkdirSync(dir, { recursive: true });
   const file = `${m.id}-${Date.now()}.jpg`;
-  fs.writeFileSync(path.join(dir, file), buf);
+  const photoPath = await storePhoto(m.id, file, buf);
 
   const submission = await prisma.submission.create({
     data: {
       milestoneId: m.id,
-      photoPath: `uploads/${file}`,
+      photoPath,
       capturedAt,
       lat: d.lat,
       lng: d.lng,
@@ -236,9 +235,14 @@ milestonesRouter.get('/:id/photo', requireAuth(), async (req, res) => {
     orderBy: { createdAt: 'desc' },
   });
   if (!sub) return res.status(404).json({ error: 'No photo submitted yet' });
-  const uploads = path.join(__dirname, '..', 'uploads');
-  const file = path.join(__dirname, '..', sub.photoPath);
-  if (!file.startsWith(uploads) || !fs.existsSync(file)) {
+  const cloudinaryPhoto = await loadCloudinaryPhoto(sub.photoPath);
+  if (cloudinaryPhoto) {
+    res.type('image/jpeg').send(cloudinaryPhoto);
+    return;
+  }
+  const uploads = path.resolve(process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads'));
+  const file = path.join(uploads, path.basename(sub.photoPath));
+  if (path.dirname(file) !== uploads || !fs.existsSync(file)) {
     return res.status(404).json({ error: 'Photo file not found' });
   }
   res.sendFile(file);

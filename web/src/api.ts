@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+const BASE = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:4000');
 
 export type Role = 'CLIENT' | 'WORKER';
 export type Session = { token: string; role: Role | null; email: string };

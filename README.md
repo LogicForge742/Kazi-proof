@@ -231,6 +231,24 @@ Open <http://localhost:5173>.
 
 For the PayPal approval step, use the **Personal** sandbox account from your PayPal developer dashboard (Testing tools, then Sandbox accounts). It is a fake buyer, and no real money is involved.
 
+### 8.6 Deploy to Render
+
+The repository includes a Render Blueprint in [`render.yaml`](render.yaml). It deploys the React app and API together as one web service, plus a PostgreSQL database.
+
+1. Push the repository to GitHub.
+2. In Render, choose **New → Blueprint**, connect the repository, and apply the `render.yaml` blueprint.
+3. In the `kazi-proof` service's **Environment** settings, add:
+   - `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` from your PayPal **sandbox** app.
+   - `AI_API_KEY` from your Gemini account. Change `AI_PROVIDER` and `AI_MODEL` if using a different supported provider.
+   - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` from your Cloudinary dashboard to keep uploaded proof photos across restarts. Keep the API secret private.
+4. Wait for the service to deploy. Render runs Prisma migrations on service startup.
+5. Open the service's `onrender.com` URL. Check `<your-service-url>/api/health`; the response should show `"ok": true` and `"db": true`.
+6. To create the demo users, open the service's **Shell** and run `npm run seed` from the `server` directory.
+
+The Blueprint uses free plans for a demo. With Cloudinary configured, proof photos are stored remotely instead of on Render's ephemeral filesystem. Without Cloudinary, the app falls back to local uploads, which can disappear when the service restarts or redeploys. Cloudinary usage is subject to your account's current storage and bandwidth limits. Free PostgreSQL availability and retention are limited; check Render's current plan terms before relying on it.
+
+PayPal stays in sandbox mode with this configuration. The known demo login credentials are public in this README; use them only for a test deployment and do not reuse passwords or credentials from other systems.
+
 ## 9. Using the app
 
 **As the client**

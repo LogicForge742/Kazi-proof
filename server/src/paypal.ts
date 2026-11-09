@@ -39,7 +39,7 @@ async function ppCall(method: string, path: string, body?: unknown, requestId: s
 
 /** Client approves once; funds are held as an authorization. */
 export async function createAuthorizeOrder(amount: string, currency: string, jobId: string) {
-  const web = process.env.WEB_URL ?? 'https://example.com';
+  const web = process.env.WEB_URL ?? process.env.RENDER_EXTERNAL_URL ?? 'https://example.com';
   const j = await ppCall('POST', '/v2/checkout/orders', {
     intent: 'AUTHORIZE',
     purchase_units: [{ reference_id: jobId, amount: { currency_code: currency, value: amount } }],
