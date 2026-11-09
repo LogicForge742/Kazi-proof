@@ -1,0 +1,46 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { api, getSession } from '../api';
+import MilestoneCard, { type Milestone } from '../components/MilestoneCard';
+
+type Job = { id: string; title: string; description: string; status: string; totalAmount: string; currency: string; milestones: Milestone[] };
+
+export default function JobDetail() {
+  const { id } = useParams();
+  const role = getSession()?.role ?? null;
+  const [job, setJob] = useState<Job | null>(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    api<{ job: Job }>(`/api/jobs/${id}`)
+      .then((d) => setJob(d.job))
+      .catch((e) => setError(e.message));
+  }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <div className="max-w-3xl mx-auto p-4 space-y-4">
+      <Link className="text-sm text-white/70 hover:text-brand-500 no-underline" to="/">← My jobs</Link>
+      {error && <p className="text-red-600">{error}</p>}
+      {!job && !error && <p>Loading…</p>}
+      {job && (
+        <>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-bold">{job.title}</h1>
+              <p className="text-sm text-white/70">{job.description}</p>
+            </div>
+            <span className="text-xs bg-canvas rounded px-2 py-1">{job.status}</span>
+          </div>
+          <p className="text-sm">Total: {job.totalAmount} {job.currency}</p>
+          {job.milestones.map((m) => (
+            <MilestoneCard key={m.id} m={m} role={role} onChanged={load} />
+          ))}
+        </>
+      )}
+    </div>
+  );
+}

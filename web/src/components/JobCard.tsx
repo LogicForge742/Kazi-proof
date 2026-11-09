@@ -9,6 +9,7 @@ export type Milestone = {
   amount: string;
   status: string;
 };
+
 export type Job = {
   id: string;
   title: string;
@@ -37,32 +38,35 @@ export default function JobCard({
 
   return (
     <Card
-      className={`transition hover:shadow-md ${
-        highlight ? "border-l-4 border-l-amber-400" : ""
+      className={`group transition-all duration-200 hover:border-[#2d5c47] ${
+        highlight ? "border-l-4 border-l-amber-400/90" : ""
       }`}
     >
+      {/* Top Header: Title & Total */}
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <Link
             to={`/jobs/${job.id}`}
-            className="block truncate text-lg font-semibold hover:text-brand-700"
+            className="block truncate text-base sm:text-lg font-semibold text-white tracking-tight hover:text-emerald-400 transition-colors"
           >
             {job.title}
           </Link>
-          <p className="mt-0.5 text-sm text-muted">
+          <p className="mt-0.5 text-xs text-[#8ca89b]">
             {n} milestone{n === 1 ? "" : "s"}
           </p>
         </div>
+
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <StatusBadge status={job.status} />
-          <span className="text-lg font-bold tabular-nums">
+          <span className="text-xl sm:text-2xl font-bold tracking-tight text-white tabular-nums">
             {money(job.totalAmount, cur)}
           </span>
         </div>
       </div>
 
+      {/* Progress Bar & Counters */}
       <div className="mt-4">
-        <div className="mb-1.5 flex justify-between text-xs text-muted">
+        <div className="mb-1.5 flex justify-between text-xs text-[#8ca89b] font-mono">
           <span>
             {paid.length} of {n} released
           </span>
@@ -73,17 +77,24 @@ export default function JobCard({
         <ProgressBar value={paid.length} total={n} />
       </div>
 
-      <ul className="mt-4 divide-y divide-line border-t border-line">
+      {/* Milestones List */}
+      <ul className="mt-4 divide-y divide-white/[0.05] border-t border-white/[0.08]">
         {milestones.map((m) => (
-          <li key={m.id} className="flex items-center justify-between gap-3 py-2.5">
+          <li
+            key={m.id}
+            className="flex items-center justify-between gap-3 py-2.5 transition-colors hover:bg-white/[0.02] px-1 rounded-lg"
+          >
             <div className="flex min-w-0 items-center gap-3">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-xs font-semibold text-muted ring-1 ring-line">
+              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-[#2b4c3c] bg-[#0e1d16] text-[11px] font-mono font-medium text-[#8ca89b]">
                 {m.position}
               </span>
-              <span className="truncate text-sm">{m.title}</span>
+              <span className="truncate text-xs sm:text-sm text-[#f0fdf4]/90 font-normal">
+                {m.title}
+              </span>
             </div>
+
             <div className="flex shrink-0 items-center gap-3">
-              <span className="text-sm font-medium tabular-nums">
+              <span className="text-xs sm:text-sm font-medium font-mono text-white tabular-nums">
                 {money(m.amount, cur)}
               </span>
               <StatusBadge status={m.status} />
@@ -92,8 +103,9 @@ export default function JobCard({
         ))}
       </ul>
 
+      {/* Action CTA */}
       {action && (
-        <div className="mt-4 flex justify-end border-t border-line pt-4">
+        <div className="mt-4 flex justify-end border-t border-white/[0.08] pt-3">
           {action}
         </div>
       )}

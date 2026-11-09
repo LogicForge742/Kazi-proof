@@ -9,24 +9,73 @@ export type Milestone = {
   criteria: string;
   status: string;
 };
+
 type Report = { verdict: 'MATCHES' | 'MISMATCH' | 'UNCLEAR'; confidence: number; summary: string };
 type Submission = { id: string; flags: string[]; createdAt: string; reports: Report[] };
 type Detail = { submissions: Submission[]; payment: { status: string } | null };
 
-const VERDICT: Record<Report['verdict'], string> = {
-  MATCHES: 'AI: looks like a match',
-  MISMATCH: 'AI: does not match',
-  UNCLEAR: 'AI: partly matches',
-};
-const FLAG: Record<string, string> = {
-  STALE_PHOTO: 'Photo is older than 24 hours',
-  FUTURE_TIMESTAMP: 'Photo time is in the future',
-  NO_LOCATION: 'No location sent with the photo',
-  LOCATION_FAR: 'Photo taken far from the job site',
-  AI_NO_MATCH: 'AI thinks the photo does not match',
+const VERDICT: Record<Report['verdict'], { text: string; color: string }> = {
+  MATCHES: { text: 'AI: Looks like a match', color: 'text-emerald-400' },
+  MISMATCH: { text: 'AI: Does not match', color: 'text-rose-400' },
+  UNCLEAR: { text: 'AI: Partly matches / Unclear', color: 'text-amber-400' },
 };
 
-// Shrinks a phone photo to at most 1600px so the upload stays small.
+const FLAG: Record<string, string> = {
+  STALE_PHOTO: 'Photo is older than 24 hours',
+  FUTURE_TIMESTAMP: 'Photo timestamp is in the future',
+  NO_LOCATION: 'No location sent with the photo',
+  LOCATION_FAR: 'Photo taken far from the job site',
+  AI_NO_MATCH: 'AI flagged photo does not match description',
+};
+
+const STATUS_CONFIG: Record<string, { label: string; pill: string; dot: string }> = {
+  PLANNED: {
+    label: 'Planned',
+    pill: 'bg-[#13231a] text-[#8ca89b] border-[#234232]',
+    dot: 'bg-[#526f62]',
+  },
+  ACTIVE: {
+    label: 'In progress',
+    pill: 'bg-[#082338] text-[#38bdf8] border-sky-500/30',
+    dot: 'bg-sky-400',
+  },
+  FLAGGED: {
+    label: 'Flagged',
+    pill: 'bg-[#271a08] text-[#fcd34d] border-amber-500/30',
+    dot: 'bg-amber-400 animate-pulse',
+  },
+  UNDER_REVIEW: {
+    label: 'Under review',
+    pill: 'bg-[#271a08] text-[#fcd34d] border-amber-500/30',
+    dot: 'bg-amber-400 animate-pulse',
+  },
+  APPROVED: {
+    label: 'Approved',
+    pill: 'bg-[#0b291d] text-[#34d399] border-emerald-500/30',
+    dot: 'bg-emerald-400',
+  },
+  RELEASED: {
+    label: 'Released',
+    pill: 'bg-[#092925] text-[#2dd4bf] border-teal-500/30',
+    dot: 'bg-teal-400',
+  },
+  DISPUTED: {
+    label: 'Disputed',
+    pill: 'bg-[#2b1016] text-[#fda4af] border-rose-500/30',
+    dot: 'bg-rose-400',
+  },
+};
+
+const BTN_PRIMARY =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-xs sm:text-sm font-semibold text-black shadow-sm transition hover:bg-emerald-400 active:translate-y-[1px] disabled:opacity-40 disabled:cursor-not-allowed';
+
+const BTN_OUTLINE =
+  'inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs sm:text-sm font-semibold text-[#f0fdf4] transition hover:bg-white/[0.08] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed';
+
+const BTN_WARN =
+  'inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-950/60 px-4 py-2 text-xs sm:text-sm font-semibold text-amber-300 transition hover:bg-amber-900/60 disabled:opacity-40 disabled:cursor-not-allowed';
+
+// Shrinks a phone photo to at most 1600px so upload stays small
 async function toJpegDataUrl(file: File): Promise<string> {
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
@@ -122,68 +171,196 @@ export default function MilestoneCard({
   const isClient = role === 'CLIENT';
   const report = latest?.reports[0];
 
+  const flags = latest?.flags ?? [];
+  const timeOk = !flags.includes('STALE_PHOTO') && !flags.includes('FUTURE_TIMESTAMP');
+  const placeOk = !flags.includes('NO_LOCATION') && !flags.includes('LOCATION_FAR');
+  const pct = report ? Math.round(report.confidence * 100) : 0;
+  const barGradient =
+    report?.verdict === 'MATCHES'
+      ? 'from-emerald-500 to-teal-400'
+      : report?.verdict === 'UNCLEAR'
+      ? 'from-amber-500 to-yellow-400'
+      : 'from-rose-500 to-red-400';
+
+  const needsReview = isClient && (m.status === 'UNDER_REVIEW' || m.status === 'FLAGGED');
+  const statusInfo = STATUS_CONFIG[m.status] ?? STATUS_CONFIG.PLANNED;
+
   return (
-    <div className="bg-white rounded-xl shadow p-4 space-y-3">
-      <div className="flex justify-between">
-        <h3 className="font-semibold">{m.position}. {m.title}</h3>
-        <span className="text-xs bg-gray-100 rounded px-2 py-1">{m.status}</span>
+    <div
+      className={`rounded-2xl border bg-[#0b1712] p-5 sm:p-6 shadow-xl transition-all ${
+        needsReview
+          ? 'border-amber-400/80 shadow-amber-950/20'
+          : 'border-[#1b382b] hover:border-[#2d5c47]'
+      } space-y-4`}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[#2b4c3c] bg-[#0e1d16] text-xs font-mono font-medium text-[#8ca89b]">
+            {m.position}
+          </span>
+          <h3 className="font-semibold text-white text-base sm:text-lg tracking-tight">
+            {m.title}
+          </h3>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusInfo.pill}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${statusInfo.dot}`} />
+            {statusInfo.label}
+          </span>
+          <span className="text-sm sm:text-base font-bold font-mono text-white tabular-nums">
+            ${Number(m.amount).toFixed(2)}
+          </span>
+        </div>
       </div>
-      <p className="text-sm">{m.amount} USD</p>
-      <p className="text-sm text-gray-600">Proof needed: {m.criteria}</p>
 
-      {photo && <img src={photo} alt="Submitted proof" className="rounded max-h-80" />}
-
-      {report && (
-        <p className="text-sm">
-          <b>{VERDICT[report.verdict]}</b> ({Math.round(report.confidence * 100)}% sure). {report.summary}
+      {/* Proof Criteria Box */}
+      <div className="rounded-xl border border-white/[0.05] bg-[#07130e] p-3.5 space-y-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#8ca89b]">
+          Required Proof
         </p>
+        <p className="text-xs sm:text-sm text-[#f0fdf4]/90 leading-relaxed">
+          {m.criteria}
+        </p>
+      </div>
+
+      {/* Uploaded Photo Preview */}
+      {photo && (
+        <div className="overflow-hidden rounded-xl border border-white/10 bg-black/40">
+          <img
+            src={photo}
+            alt="Submitted proof"
+            className="w-full max-h-80 object-cover rounded-xl transition hover:scale-[1.01]"
+          />
+        </div>
       )}
-      {latest && latest.flags.length > 0 && (
-        <ul className="text-sm text-amber-700 list-disc pl-5">
-          {latest.flags.map((f) => <li key={f}>{FLAG[f] ?? f}</li>)}
+
+      {/* AI Verification Report */}
+      {report && (
+        <div className="rounded-xl border border-white/[0.06] bg-[#07130e] p-4 space-y-2.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className={`font-semibold uppercase tracking-wider ${VERDICT[report.verdict].color}`}>
+              {VERDICT[report.verdict].text}
+            </span>
+            <span className="font-mono text-[#8ca89b]">{pct}% match</span>
+          </div>
+
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${barGradient} transition-all duration-500`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+
+          <p className="text-xs sm:text-sm text-[#8ca89b] leading-relaxed">
+            {report.summary}
+          </p>
+        </div>
+      )}
+
+      {/* Metadata Check Flags */}
+      {latest && (
+        <ul className="space-y-1 text-xs">
+          {timeOk && (
+            <li className="flex items-center gap-2 text-emerald-400">
+              <span>✓</span> Photo taken recently
+            </li>
+          )}
+          {placeOk && (
+            <li className="flex items-center gap-2 text-emerald-400">
+              <span>✓</span> Confirmed at job location
+            </li>
+          )}
+          {flags.map((f) => (
+            <li key={f} className="flex items-center gap-2 text-amber-300">
+              <span>⚠</span> {FLAG[f] ?? f}
+            </li>
+          ))}
         </ul>
       )}
-      {detail?.payment && <p className="text-sm text-gray-600">Payment: {detail.payment.status}</p>}
 
-      {isWorker && (m.status === 'PLANNED' || m.status === 'DISPUTED') && (
-        <button className="bg-emerald-600 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
-          disabled={busy !== ''} onClick={() => act('start', () => post('start'))}>
-          {m.status === 'DISPUTED' ? 'Restart this step' : 'Start this step'}
-        </button>
+      {detail?.payment && (
+        <div className="text-xs font-mono text-[#8ca89b]">
+          Payment status: <span className="text-emerald-400">{detail.payment.status}</span>
+        </div>
       )}
 
-      {isWorker && (m.status === 'ACTIVE' || m.status === 'FLAGGED') && (
-        <div className="space-y-2">
-          <input key={latest?.id ?? "none"} type="file" accept="image/*" capture="environment"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <button className="bg-blue-600 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
-            disabled={!file || busy !== ''} onClick={submit}>
-            {busy === 'submit' ? 'Uploading and checking…' : 'Submit photo proof'}
+      {/* Worker Action: Start Step */}
+      {isWorker && (m.status === 'PLANNED' || m.status === 'DISPUTED') && (
+        <div className="pt-2">
+          <button
+            className={BTN_PRIMARY}
+            disabled={busy !== ''}
+            onClick={() => act('start', () => post('start'))}
+          >
+            {m.status === 'DISPUTED' ? 'Restart this step' : 'Start this step'}
           </button>
         </div>
       )}
 
-      {isClient && (m.status === 'UNDER_REVIEW' || m.status === 'FLAGGED') && (
-        <div className="flex gap-2">
-          <button className="bg-emerald-600 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
-            disabled={busy !== ''} onClick={() => act('approve', () => post('approve'))}>
-            {busy === 'approve' ? 'Paying…' : `Approve and pay ${m.amount} USD`}
+      {/* Worker Action: Upload Proof */}
+      {isWorker && (m.status === 'ACTIVE' || m.status === 'FLAGGED') && (
+        <div className="space-y-3 pt-2">
+          <input
+            key={latest?.id ?? 'none'}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="block w-full text-xs text-[#8ca89b] file:mr-3 file:rounded-xl file:border file:border-white/10 file:bg-white/[0.05] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#f0fdf4] hover:file:bg-white/[0.09] transition"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <button
+            className={BTN_PRIMARY}
+            disabled={!file || busy !== ''}
+            onClick={submit}
+          >
+            {busy === 'submit' ? 'Uploading & verifying…' : 'Submit photo proof'}
           </button>
-          <button className="border rounded px-3 py-1 text-sm disabled:opacity-50"
-            disabled={busy !== ''} onClick={() => act('dispute', () => post('dispute'))}>
+        </div>
+      )}
+
+      {/* Client Action: Review & Payout */}
+      {needsReview && (
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/[0.06]">
+          <button
+            className={BTN_PRIMARY}
+            disabled={busy !== ''}
+            onClick={() => act('approve', () => post('approve'))}
+          >
+            {busy === 'approve' ? 'Processing…' : `Approve & release $${Number(m.amount).toFixed(2)}`}
+          </button>
+          <button
+            className={BTN_OUTLINE}
+            disabled={busy !== ''}
+            onClick={() => act('dispute', () => post('dispute'))}
+          >
             Dispute
           </button>
         </div>
       )}
 
+      {/* Client Action: Retry Failed Payment */}
       {isClient && m.status === 'APPROVED' && (
-        <button className="bg-amber-600 text-white rounded px-3 py-1 text-sm disabled:opacity-50"
-          disabled={busy !== ''} onClick={() => act('release', () => post('release'))}>
-          Retry payment
-        </button>
+        <div className="pt-2">
+          <button
+            className={BTN_WARN}
+            disabled={busy !== ''}
+            onClick={() => act('release', () => post('release'))}
+          >
+            Retry payout
+          </button>
+        </div>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {/* Inline Error */}
+      {error && (
+        <p className="rounded-lg border border-rose-500/30 bg-rose-950/40 p-2 text-xs text-rose-300">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

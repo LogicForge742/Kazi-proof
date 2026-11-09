@@ -1,26 +1,145 @@
 @import "tailwindcss";
-@import "@fontsource-variable/bricolage-grotesque";
-@import "@fontsource-variable/figtree";
 
 @theme {
-  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
-  --font-sans: "Figtree Variable", system-ui, sans-serif;
-
-  --color-ink: #14211B;
-  --color-paper: #F2F4F1;
-  --color-line: #D9DED9;
-  --color-muted: #5F6B64;
-
-  --color-kazi: #0E7A57;
-  --color-kazi-dark: #0B6548;
-  --color-move: #B87503;
-  --color-move-soft: #FBEFD3;
-  --color-prob: #B3412E;
-  --color-prob-soft: #F6DED9;
+  --color-brand-50:  #ecfdf5;
+  --color-brand-500: #34c38f;
+  --color-brand-600: #22a678;
+  --color-brand-700: #15803d;
+  --color-attention: #f5b82e;
+  --color-ink:       #0f1a16;
+  --color-surface:   #16211d;
+  --color-canvas:    #0c1512;
 }
 
-@layer base {
-  body { @apply bg-paper text-ink font-sans antialiased; }
-  h1, h2, h3 { @apply font-display tracking-tight; }
-  :focus-visible { outline: 2px solid var(--color-move); outline-offset: 2px; }
+body {
+  background-color: var(--color-canvas);
+  color: #ffffff;
+}
+
+.progress-striped {
+  background: repeating-linear-gradient(
+    135deg, var(--color-attention) 0 8px, #3a3a1f 8px 16px);
+}
+
+*, ::after, ::before, ::backdrop, ::file-selector-button {
+  border-color: rgb(255 255 255 / 0.1);
+}
+
+/* progress bar track */
+[class*="rounded-full"][class*="h-1"][class*="bg-canvas"],
+[class*="rounded-full"][class*="h-2"][class*="bg-canvas"] {
+  background-color: rgb(255 255 255 / 0.12);
+}
+
+/* ---- header fix ---- */
+header, nav {
+  background-color: var(--color-canvas) !important;   /* fully opaque, no content bleeding through */
+  border-bottom: 1px solid rgb(255 255 255 / 0.1) !important;
+}
+header a, header button, nav a, nav button {
+  color: #ffffff !important;
+}
+header button:hover, header a:hover, nav button:hover, nav a:hover {
+  color: var(--color-brand-500) !important;
+}
+/* CLIENT role badge */
+header span[class*="uppercase"], nav span[class*="uppercase"] {
+  background-color: rgb(52 195 143 / 0.15) !important;
+  color: var(--color-brand-500) !important;
+}
+
+/* ---- dividers and number circles ---- */
+.border-t, .border-b, .divide-y > * + * {
+  border-color: rgb(255 255 255 / 0.1) !important;
+}
+.border:not([class*="border-l"]) {
+  border-color: rgb(255 255 255 / 0.18) !important;
+}
+
+/* ---- progress track ---- */
+[class*="rounded-full"][class*="h-1"], [class*="rounded-full"][class*="h-2"] {
+  background-color: rgb(255 255 255 / 0.12);
+}
+
+/* ---- forms ---- */
+label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(255 255 255 / 0.8);
+  margin-bottom: 0.375rem;
+}
+
+input, textarea, select {
+  background-color: var(--color-canvas) !important;
+  color: #ffffff !important;
+  border: 1px solid rgb(255 255 255 / 0.15) !important;
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  color-scheme: dark;              /* dark number spinners and scrollbars */
+  transition: border-color .15s, box-shadow .15s;
+}
+input::placeholder, textarea::placeholder {
+  color: rgb(255 255 255 / 0.35);
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--color-brand-500) !important;
+  box-shadow: 0 0 0 3px rgb(52 195 143 / 0.25);
+}
+
+/* primary submit button: bright when usable, clearly disabled when not */
+form button[type="submit"] {
+  background-color: var(--color-brand-500) !important;
+  color: var(--color-ink) !important;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  padding: 0.625rem 1.25rem;
+}
+form button[type="submit"]:hover:not(:disabled) {
+  background-color: var(--color-brand-600) !important;
+}
+form button[type="submit"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* back link */
+main a[href="/"], main a[href="/jobs"] {
+  color: rgb(255 255 255 / 0.7);
+  text-decoration: none;
+}
+main a[href="/"]:hover, main a[href="/jobs"]:hover {
+  color: var(--color-brand-500);
+}
+
+form button:disabled {
+  background-color: rgb(255 255 255 / 0.08) !important;
+  color: rgb(255 255 255 / 0.4) !important;
+  opacity: 1;
+  cursor: not-allowed;
+}
+form button:not(:disabled) {
+  background-color: var(--color-brand-500) !important;
+  color: var(--color-ink) !important;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--color-brand-500) !important;
+  box-shadow: 0 0 0 3px rgb(52 195 143 / 0.35) !important;
+}
+
+input:focus, textarea:focus {
+  box-shadow: 0 0 0 3px rgb(52 195 143 / 0.6) !important;
+}
+
+@theme {
+  --color-kazi-bg: #06110d;
+  --color-kazi-card: #0d1b15;
+  --color-kazi-border: #1f3b2f;
+  --color-kazi-border-hover: #2d5544;
+  --color-kazi-text: #f0fdf4;
+  --color-kazi-muted: #8ca89b;
+  --color-kazi-faint: #415e51;
+  --color-kazi-mint: #10b981;
 }

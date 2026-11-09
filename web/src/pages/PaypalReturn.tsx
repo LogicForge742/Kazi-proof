@@ -18,7 +18,7 @@ export default function PaypalReturn() {
     <div className="max-w-md mx-auto p-6 space-y-4 text-center">
       <h1 className="text-xl font-bold">PayPal</h1>
       <p>{msg}</p>
-      <Link className="underline" to="/">Back to my jobs</Link>
+      <Link className="text-sm text-white/70 hover:text-brand-500 no-underline" to="/">Back to my jobs</Link>
     </div>
   );
 }

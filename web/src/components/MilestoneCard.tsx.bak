@@ -1,0 +1,227 @@
+import { useEffect, useState } from 'react';
+import { api, photoUrl } from '../api';
+
+export type Milestone = {
+  id: string;
+  position: number;
+  title: string;
+  amount: string;
+  criteria: string;
+  status: string;
+};
+type Report = { verdict: 'MATCHES' | 'MISMATCH' | 'UNCLEAR'; confidence: number; summary: string };
+type Submission = { id: string; flags: string[]; createdAt: string; reports: Report[] };
+type Detail = { submissions: Submission[]; payment: { status: string } | null };
+
+const VERDICT: Record<Report['verdict'], string> = {
+  MATCHES: 'AI: looks like a match',
+  MISMATCH: 'AI: does not match',
+  UNCLEAR: 'AI: partly matches',
+};
+const FLAG: Record<string, string> = {
+  STALE_PHOTO: 'Photo is older than 24 hours',
+  FUTURE_TIMESTAMP: 'Photo time is in the future',
+  NO_LOCATION: 'No location sent with the photo',
+  LOCATION_FAR: 'Photo taken far from the job site',
+  AI_NO_MATCH: 'AI thinks the photo does not match',
+};
+
+// Shrinks a phone photo to at most 1600px so the upload stays small.
+async function toJpegDataUrl(file: File): Promise<string> {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * scale);
+  c.height = Math.round(bmp.height * scale);
+  c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.8);
+}
+
+function getPosition(): Promise<{ lat?: number; lng?: number }> {
+  return new Promise((res) => {
+    if (!navigator.geolocation) return res({});
+    navigator.geolocation.getCurrentPosition(
+      (p) => res({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => res({}),
+      { timeout: 5000 }
+    );
+  });
+}
+
+const PRIMARY =
+  'bg-brand-500 text-ink font-semibold hover:bg-brand-600 rounded-lg px-4 py-2 text-sm disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed disabled:hover:bg-white/10';
+const OUTLINE =
+  'border border-white/40 text-white font-semibold hover:bg-white/10 rounded-lg px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed';
+const WARN =
+  'bg-attention text-ink font-semibold hover:opacity-90 rounded-lg px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed';
+
+const STATUS_LABEL: Record<string, string> = {
+  PLANNED: 'Planned', ACTIVE: 'In progress', FLAGGED: 'Flagged', UNDER_REVIEW: 'Under review',
+  APPROVED: 'Approved', RELEASED: 'Released', DISPUTED: 'Disputed',
+};
+function pillClass(status: string) {
+  if (status === 'APPROVED' || status === 'RELEASED') return 'bg-brand-500/15 text-brand-500';
+  if (status === 'UNDER_REVIEW' || status === 'FLAGGED' || status === 'DISPUTED') return 'bg-attention/15 text-attention';
+  return 'bg-white/10 text-white/70';
+}
+
+export default function MilestoneCard({
+  m,
+  role,
+  onChanged,
+}: {
+  m: Milestone;
+  role: string | null;
+  onChanged: () => void;
+}) {
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (m.status === 'PLANNED') return;
+    api<{ milestone: Detail }>(`/api/milestones/${m.id}`)
+      .then((d) => setDetail(d.milestone))
+      .catch((e) => setError(e.message));
+  }, [m.id, m.status, tick]);
+
+  const latest = detail?.submissions[0];
+  const latestId = latest?.id;
+
+  useEffect(() => {
+    if (!latestId) return;
+    let url: string | null = null;
+    let cancelled = false;
+    photoUrl(m.id).then((u) => {
+      if (cancelled) {
+        if (u) URL.revokeObjectURL(u);
+      } else {
+        url = u;
+        setPhoto(u);
+      }
+    });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [m.id, latestId]);
+
+  async function act(label: string, fn: () => Promise<unknown>) {
+    setBusy(label);
+    setError('');
+    try {
+      await fn();
+      setFile(null);
+      setTick((t) => t + 1);
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  const post = (action: string, body?: unknown) =>
+    api(`/api/milestones/${m.id}/${action}`, { method: 'POST', body });
+
+  async function submit() {
+    if (!file) return;
+    await act('submit', async () => {
+      const [photoBase64, pos] = await Promise.all([toJpegDataUrl(file), getPosition()]);
+      await post('submit', { photoBase64, capturedAt: new Date(file.lastModified).toISOString(), ...pos });
+    });
+  }
+
+  const isWorker = role === 'WORKER';
+  const isClient = role === 'CLIENT';
+  const report = latest?.reports[0];
+
+  const flags = latest?.flags ?? [];
+  const timeOk = !flags.includes('STALE_PHOTO') && !flags.includes('FUTURE_TIMESTAMP');
+  const placeOk = !flags.includes('NO_LOCATION') && !flags.includes('LOCATION_FAR');
+  const pct = report ? Math.round(report.confidence * 100) : 0;
+  const barColor = report?.verdict === 'MATCHES' ? 'bg-brand-500' : report?.verdict === 'UNCLEAR' ? 'bg-attention' : 'bg-red-400';
+  const needsReview = isClient && (m.status === 'UNDER_REVIEW' || m.status === 'FLAGGED');
+
+  return (
+    <div className={`bg-surface rounded-2xl p-4 space-y-4 border ${needsReview ? 'border-attention/60' : 'border-white/10'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-semibold">{m.position}. {m.title}</h3>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${pillClass(m.status)}`}>
+            {STATUS_LABEL[m.status] ?? m.status}
+          </span>
+          <span className="text-sm font-bold tabular-nums">{m.amount} USD</span>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-xs uppercase tracking-wide text-white/60">Proof needed</p>
+        <p className="text-sm">{m.criteria}</p>
+      </div>
+
+      {photo && <img src={photo} alt="Submitted proof" className="w-full max-h-80 rounded-xl object-cover" />}
+
+      {report && (
+        <div className="space-y-1.5">
+          <p className="text-xs uppercase tracking-wide text-white/60">{VERDICT[report.verdict]}</p>
+          <div className="h-2 rounded-full bg-white/10">
+            <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-sm text-white/80">{pct}% confident. {report.summary}</p>
+        </div>
+      )}
+
+      {latest && (
+        <ul className="space-y-1 text-sm">
+          {timeOk && <li className="text-white/80"><span className="text-brand-500">✓</span> Taken today</li>}
+          {placeOk && <li className="text-white/80"><span className="text-brand-500">✓</span> At the job site</li>}
+          {flags.map((f) => (
+            <li key={f} className="text-attention">⚠ {FLAG[f] ?? f}</li>
+          ))}
+        </ul>
+      )}
+
+      {detail?.payment && <p className="text-sm text-white/70">Payment: {detail.payment.status}</p>}
+
+      {isWorker && (m.status === 'PLANNED' || m.status === 'DISPUTED') && (
+        <button className={PRIMARY} disabled={busy !== ''} onClick={() => act('start', () => post('start'))}>
+          {m.status === 'DISPUTED' ? 'Restart this step' : 'Start this step'}
+        </button>
+      )}
+
+      {isWorker && (m.status === 'ACTIVE' || m.status === 'FLAGGED') && (
+        <div className="space-y-3">
+          <input key={latest?.id ?? 'none'} type="file" accept="image/*" capture="environment"
+            className="block w-full text-sm text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-white/20"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <button className={PRIMARY} disabled={!file || busy !== ''} onClick={submit}>
+            {busy === 'submit' ? 'Uploading and checking…' : 'Submit photo proof'}
+          </button>
+        </div>
+      )}
+
+      {needsReview && (
+        <div className="flex flex-wrap gap-3">
+          <button className={PRIMARY} disabled={busy !== ''} onClick={() => act('approve', () => post('approve'))}>
+            {busy === 'approve' ? 'Paying…' : `Approve and pay ${m.amount} USD`}
+          </button>
+          <button className={OUTLINE} disabled={busy !== ''} onClick={() => act('dispute', () => post('dispute'))}>
+            Dispute
+          </button>
+        </div>
+      )}
+
+      {isClient && m.status === 'APPROVED' && (
+        <button className={WARN} disabled={busy !== ''} onClick={() => act('release', () => post('release'))}>
+          Retry payment
+        </button>
+      )}
+
+      {error && <p className="text-sm text-red-400">{error}</p>}
+    </div>
+  );
+}

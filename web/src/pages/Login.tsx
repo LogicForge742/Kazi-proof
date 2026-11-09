@@ -23,10 +23,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow p-6 space-y-4">
+    <div className="min-h-screen flex items-center justify-center bg-canvas p-4">
+      <div className="w-full max-w-sm bg-surface border border-white/10 rounded-xl shadow p-6 space-y-4">
         <h1 className="text-2xl font-bold">Kazi-proof</h1>
-        <p className="text-sm text-gray-600">Pay for work only when the proof is there.</p>
+        <p className="text-sm text-white/70">Pay for work only when the proof is there.</p>
         <input
           className="w-full border rounded px-3 py-2"
           placeholder="Email"
@@ -42,7 +42,7 @@ export default function Login() {
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
-          className="w-full bg-emerald-600 text-white rounded py-2 disabled:opacity-50"
+          className="w-full bg-brand-500 text-ink hover:bg-brand-600 text-white rounded py-2 disabled:opacity-50"
           disabled={busy}
           onClick={submit}
         >
