@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: cd server && npm ci && npm run build && cd ../web && npm ci && npm run build
-    startCommand: cd server && npx prisma migrate deploy && npm start
+    startCommand: cd server && npx prisma migrate deploy && node dist/seed.js && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
@@ -35,6 +35,12 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: REQUIRE_CLOUD_PHOTOS
+        value: "true"
+      - key: WEB_URL
+        sync: false
+      - key: PAYOUT_RECEIVER_EMAIL
+        value: sb-u6myd53695892@personal.example.com
 
 databases:
   - name: kazi-proof-db

@@ -22,6 +22,9 @@ function getCloudinary() {
 export async function storePhoto(milestoneId: string, fileName: string, buffer: Buffer): Promise<string> {
   const client = getCloudinary();
   if (!client) {
+    if (process.env.REQUIRE_CLOUD_PHOTOS === 'true') {
+      throw new Error('Cloudinary is required but not configured');
+    }
     const dir = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, fileName), buffer);
