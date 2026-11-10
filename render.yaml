@@ -3,7 +3,7 @@ services:
     name: kazi-proof
     runtime: node
     plan: free
-    buildCommand: cd server && npm ci && npm run build && cd ../web && npm ci && npm run build
+    buildCommand: cd server && npm ci --include=dev && npm run build && cd ../web && npm ci --include=dev && npm run build
     startCommand: cd server && npx prisma migrate deploy && node dist/seed.js && npm start
     healthCheckPath: /api/health
     envVars:
@@ -26,7 +26,7 @@ services:
       - key: AI_PROVIDER
         value: gemini
       - key: AI_MODEL
-        value: gemini-3.8-flash
+        value: gemini-3.6-flash
       - key: AI_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
