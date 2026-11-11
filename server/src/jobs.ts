@@ -14,8 +14,8 @@ const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
   workerEmail: z.string().email(),
-  siteLat: z.number().optional(),
-  siteLng: z.number().optional(),
+  siteLat: z.number().min(-90).max(90),
+  siteLng: z.number().min(-180).max(180),
   currency: z.string().length(3).default('USD'),
   autoApproveLimit: z.number().min(0).default(0),
   milestones: z

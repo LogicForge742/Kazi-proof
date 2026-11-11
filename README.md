@@ -341,9 +341,8 @@ Summary:
 
 ## 13. Known limitations
 
+- **Proof photos are not proof of authenticity.** The app captures photos live and records the time and available location at the shutter. A file-upload fallback exists and is clearly flagged. These checks raise the cost of cheating, but are not proof: device time and location can be spoofed, and a convincing photo may still pass. The client always makes the final approval.
 - **Sandbox only.** No real money moves.
-- **Photos can still be faked.** The AI judges what a photo shows, not where it came from. A convincing stock photo that passes the checks can still reach the client, which is why the client always decides and why the planned `phash` and EXIF checks matter.
-- **Browser time.** The photo time comes from the file's last-modified time, which a worker could change. Server-side metadata checks are planned.
 - **Single payout path.** Payouts go through PayPal and need the worker's PayPal email.
 - **Currency.** Jobs are created in USD by default.
 - **Budget cap.** The AI scoping endpoint accepts totals up to 5000.

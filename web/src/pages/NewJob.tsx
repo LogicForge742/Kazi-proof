@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import Layout from '../components/Layout';
 import { Button, Card, money } from '../components/ui';
+import SiteLocationField from '../components/SiteLocationField';
+import type { LatLng } from '../location';
 
 type PlanMilestone = { title: string; amount: number; criteria: string };
 type Plan = { title: string; milestones: PlanMilestone[] };
@@ -11,6 +13,7 @@ export default function NewJob() {
   const [description, setDescription] = useState('');
   const [total, setTotal] = useState('100');
   const [workerEmail, setWorkerEmail] = useState('worker@kazi.demo');
+  const [site, setSite] = useState<LatLng | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -31,12 +34,12 @@ export default function NewJob() {
   }
 
   async function createAndFund() {
-    if (!plan) return;
+    if (!plan || !site) return;
     setBusy('create');
     setError('');
     try {
       const { job } = await api<{ job: { id: string } }>('/api/jobs', {
-        body: { title: plan.title, description, workerEmail, milestones: plan.milestones },
+        body: { title: plan.title, description, workerEmail, siteLat: site.lat, siteLng: site.lng, milestones: plan.milestones },
       });
       const { approveUrl } = await api<{ approveUrl: string }>(`/api/jobs/${job.id}/fund`, { method: 'POST' });
       window.location.href = approveUrl;
@@ -112,6 +115,8 @@ export default function NewJob() {
             </div>
           </div>
 
+          <SiteLocationField value={site} onChange={setSite} />
+
           <div className="pt-2 flex justify-end">
             <button
               onClick={preview}
@@ -168,7 +173,7 @@ export default function NewJob() {
                 <Button
                   variant="paypal"
                   onClick={createAndFund}
-                  disabled={busy === 'create'}
+                  disabled={busy === 'create' || !site}
                   className="px-6 py-2.5 text-sm"
                 >
                   {busy === 'create' ? 'Creating...' : 'Confirm & Fund with PayPal'}

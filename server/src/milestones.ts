@@ -1,4 +1,5 @@
 import { Router, Request } from 'express';
+import { randomInt } from 'crypto';
 import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
@@ -100,11 +101,37 @@ milestonesRouter.post('/:id/start', requireAuth(Role.WORKER), async (req, res) =
   res.json({ id: m.id, status: 'ACTIVE' });
 });
 
+const CHALLENGE_TTL_MS = 15 * 60 * 1000;
+
+// One-time code the worker must show in the photo. Stored in the existing
+// challengeCode column as "1234:<expiresAtMs>", so no migration is needed.
+function readChallenge(stored: string | null): { code: string; expiresAt: number } | null {
+  if (!stored) return null;
+  const [code, exp] = stored.split(':');
+  const expiresAt = Number(exp);
+  if (!/^\d{4}$/.test(code ?? '') || !Number.isFinite(expiresAt)) return null;
+  return { code, expiresAt };
+}
+
+// Worker asks for a fresh code when opening the camera. Each call replaces the last one.
+milestonesRouter.post('/:id/challenge', requireAuth(Role.WORKER), async (req, res) => {
+  const m = await loadMilestone(idOf(req), req.user!.id);
+  if (!m || m.job.workerId !== req.user!.id) return res.status(404).json({ error: 'Milestone not found' });
+  if (m.status !== 'ACTIVE' && m.status !== 'FLAGGED') {
+    return res.status(409).json({ error: 'Cannot take proof while milestone is ' + m.status });
+  }
+  const code = String(randomInt(1000, 10000));
+  const expiresAt = Date.now() + CHALLENGE_TTL_MS;
+  await prisma.milestone.update({ where: { id: m.id }, data: { challengeCode: code + ':' + expiresAt } });
+  res.json({ code, expiresAt: new Date(expiresAt).toISOString() });
+});
+
 const submitSchema = z.object({
   photoBase64: z.string().min(100),
   capturedAt: z.string().min(1),
   lat: z.number().optional(),
   lng: z.number().optional(),
+  source: z.enum(['camera', 'upload']).optional(),
 });
 
 // Worker submits photo evidence. Rule-based flags decide SUBMITTED -> UNDER_REVIEW or FLAGGED.
@@ -126,6 +153,9 @@ milestonesRouter.post('/:id/submit', requireAuth(Role.WORKER), async (req, res) 
   const age = Date.now() - capturedAt.getTime();
   if (age > MAX_AGE_MS) flags.push('STALE_PHOTO');
   if (age < -5 * 60 * 1000) flags.push('FUTURE_TIMESTAMP');
+  // Live camera shots are marked by the app; anything else is labelled, not blocked.
+  // Self-declared by the client, so it is a signal, not proof.
+  if (d.source !== 'camera') flags.push('NOT_LIVE_CAPTURE');
 
   let distanceM: number | null = null;
   if (d.lat == null || d.lng == null) {
@@ -140,6 +170,10 @@ milestonesRouter.post('/:id/submit', requireAuth(Role.WORKER), async (req, res) 
   if (buf.length === 0 || buf.length > 8 * 1024 * 1024) {
     return res.status(400).json({ error: 'Photo is empty or larger than 8 MB' });
   }
+  const challenge = readChallenge(m.challengeCode);
+  const challengeLive = challenge !== null && challenge.expiresAt > Date.now();
+  if (!challengeLive) flags.push('NO_ACTIVE_CODE');
+  let codeChecked = false;
   let aiVerdict: string | null = null;
   let aiReason: string | null = null;
   let aiConfidence: number | null = null;
@@ -148,10 +182,15 @@ milestonesRouter.post('/:id/submit', requireAuth(Role.WORKER), async (req, res) 
     aiVerdict = v.verdict;
     aiReason = v.reason;
     aiConfidence = v.confidence;
+    if (challengeLive && challenge) {
+      codeChecked = true;
+      if (v.codeSeen !== challenge.code) flags.push('CODE_NOT_SEEN');
+    }
     if (v.verdict === 'NO_MATCH') flags.push('AI_NO_MATCH');
   } catch (e) {
     console.error('photo check failed:', (e as Error).message);
   }
+  if (challengeLive && !codeChecked) flags.push('CODE_UNCHECKED');
 
   const file = `${m.id}-${Date.now()}.jpg`;
   const photoPath = await storePhoto(m.id, file, buf);
@@ -184,6 +223,9 @@ milestonesRouter.post('/:id/submit', requireAuth(Role.WORKER), async (req, res) 
     }
   }
 
+  if (m.challengeCode) {
+    await prisma.milestone.update({ where: { id: m.id }, data: { challengeCode: null } });
+  }
   await setStatus(m.id, m.status, 'SUBMITTED');
   const next: S = flags.length ? 'FLAGGED' : 'UNDER_REVIEW';
   await setStatus(m.id, 'SUBMITTED', next);

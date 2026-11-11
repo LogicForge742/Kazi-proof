@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, photoUrl } from '../api';
+import CameraCapture, { type Capture } from './CameraCapture';
 
 export type Milestone = {
   id: string;
@@ -26,6 +27,10 @@ const FLAG: Record<string, string> = {
   NO_LOCATION: 'No location sent with the photo',
   LOCATION_FAR: 'Photo taken far from the job site',
   AI_NO_MATCH: 'AI flagged photo does not match description',
+  CODE_NOT_SEEN: 'The challenge code was not found in the photo',
+  CODE_UNCHECKED: 'The challenge code could not be checked (AI check failed)',
+  NO_ACTIVE_CODE: 'No valid challenge code was issued for this photo',
+  NOT_LIVE_CAPTURE: 'Photo was uploaded from files, not taken live in the app',
 };
 
 const STATUS_CONFIG: Record<string, { label: string; pill: string; dot: string }> = {
@@ -109,6 +114,9 @@ export default function MilestoneCard({
   const [detail, setDetail] = useState<Detail | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [shot, setShot] = useState<Capture | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
@@ -147,6 +155,8 @@ export default function MilestoneCard({
     try {
       await fn();
       setFile(null);
+      setShot(null);
+      setCameraOpen(false);
       setTick((t) => t + 1);
       onChanged();
     } catch (e) {
@@ -159,11 +169,26 @@ export default function MilestoneCard({
   const post = (action: string, body?: unknown) =>
     api(`/api/milestones/${m.id}/${action}`, { method: 'POST', body });
 
+  async function openCamera() {
+    setError('');
+    try {
+      const c = (await post('challenge')) as { code: string };
+      setCode(c.code);
+      setCameraOpen(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function submit() {
+    if (shot) {
+      await act('submit', () => post('submit', { ...shot, source: 'camera' }));
+      return;
+    }
     if (!file) return;
     await act('submit', async () => {
       const [photoBase64, pos] = await Promise.all([toJpegDataUrl(file), getPosition()]);
-      await post('submit', { photoBase64, capturedAt: new Date(file.lastModified).toISOString(), ...pos });
+      await post('submit', { photoBase64, capturedAt: new Date(file.lastModified).toISOString(), ...pos, source: 'upload' });
     });
   }
 
@@ -245,7 +270,7 @@ export default function MilestoneCard({
             <span className={`font-semibold uppercase tracking-wider ${VERDICT[report.verdict].color}`}>
               {VERDICT[report.verdict].text}
             </span>
-            <span className="font-mono text-[#8ca89b]">{pct}% match</span>
+            <span className="font-mono text-[#8ca89b]">{pct}% confidence</span>
           </div>
 
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
@@ -301,24 +326,66 @@ export default function MilestoneCard({
         </div>
       )}
 
-      {/* Worker Action: Upload Proof */}
+      {/* Worker Action: Capture Proof */}
       {isWorker && (m.status === 'ACTIVE' || m.status === 'FLAGGED') && (
         <div className="space-y-3 pt-2">
-          <input
-            key={latest?.id ?? 'none'}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="block w-full text-xs text-[#8ca89b] file:mr-3 file:rounded-xl file:border file:border-white/10 file:bg-white/[0.05] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#f0fdf4] hover:file:bg-white/[0.09] transition"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          <button
-            className={BTN_PRIMARY}
-            disabled={!file || busy !== ''}
-            onClick={submit}
-          >
-            {busy === 'submit' ? 'Uploading & verifying…' : 'Submit photo proof'}
-          </button>
+          {cameraOpen ? (
+            <CameraCapture
+              code={code ?? undefined}
+              onCapture={(c) => {
+                setShot(c);
+                setCameraOpen(false);
+              }}
+              onCancel={() => setCameraOpen(false)}
+              hint="Take the photo at the job site. Your location and the time are recorded when you press the button."
+            />
+          ) : shot ? (
+            <div className="space-y-3">
+              <img src={shot.photoBase64} alt="Your photo" className="w-full max-h-80 rounded-xl object-cover" />
+              <div className="flex flex-wrap gap-3">
+                <button className={BTN_PRIMARY} disabled={busy !== ''} onClick={submit}>
+                  {busy === 'submit' ? 'Uploading & verifying…' : 'Use this photo & submit'}
+                </button>
+                <button
+                  className={BTN_OUTLINE}
+                  disabled={busy !== ''}
+                  onClick={() => {
+                    setShot(null);
+                    void openCamera();
+                  }}
+                >
+                  Retake
+                </button>
+              </div>
+              {shot.lat == null && (
+                <p className="text-xs text-amber-300">
+                  No location was captured. Allow location access and retake, or the client will see a warning.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <button className={BTN_PRIMARY} disabled={busy !== ''} onClick={openCamera}>
+                Open camera
+              </button>
+              <details className="text-xs text-[#8ca89b]">
+                <summary className="cursor-pointer">Camera not working? Upload a photo instead</summary>
+                <div className="space-y-2 pt-2">
+                  <p>Uploaded photos are marked as not taken live, and the client will see that.</p>
+                  <input
+                    key={latest?.id ?? 'none'}
+                    type="file"
+                    accept="image/*"
+                    className="block w-full text-xs text-[#8ca89b] file:mr-3 file:rounded-xl file:border file:border-white/10 file:bg-white/[0.05] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#f0fdf4] hover:file:bg-white/[0.09] transition"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                  <button className={BTN_OUTLINE} disabled={!file || busy !== ''} onClick={submit}>
+                    {busy === 'submit' ? 'Uploading & verifying…' : 'Submit uploaded photo'}
+                  </button>
+                </div>
+              </details>
+            </div>
+          )}
         </div>
       )}
 
