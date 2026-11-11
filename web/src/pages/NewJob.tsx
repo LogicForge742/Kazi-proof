@@ -92,7 +92,6 @@ export default function NewJob() {
                 Total Budget (USD)
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-sm text-[#526f62] font-mono">$</span>
                 <input
                   type="number"
                   value={total}
