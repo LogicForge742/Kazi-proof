@@ -119,7 +119,7 @@ export default function NewJob() {
           <div className="pt-2 flex justify-end">
             <button
               onClick={preview}
-              disabled={busy === 'preview' || !description.trim()}
+              disabled={busy === 'preview' || !description.trim() || !(Number(total) > 0) || !workerEmail.trim() || !site}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-black shadow-sm transition hover:bg-emerald-400 active:translate-y-[1px] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {busy === 'preview' ? 'Analyzing with AI…' : 'Generate Milestones'}
