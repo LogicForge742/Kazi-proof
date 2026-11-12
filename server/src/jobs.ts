@@ -31,7 +31,7 @@ jobsRouter.post('/', requireAuth(Role.CLIENT), async (req, res) => {
 
   const worker = await prisma.user.findUnique({ where: { email: d.workerEmail } });
   if (!worker || worker.role !== Role.WORKER) {
-    return res.status(400).json({ error: 'workerEmail must belong to a worker account' });
+    return res.status(400).json({ error: 'No worker account found with that email' });
   }
 
   const cents = d.milestones.map((m) => Math.round(m.amount * 100));

@@ -6,6 +6,9 @@ Kazi-proof is a milestone-based escrow platform for physical work such as carpen
 
 > Status: hackathon project, running on the **PayPal sandbox** (test money only).
 
+**Live demo:** https://kazi-proof.onrender.com (free hosting sleeps after 15 minutes idle, so the first load can take about a minute).
+**Test accounts:** `client@kazi.demo` and `worker@kazi.demo`, password `demo1234`.
+
 ---
 
 ## Table of contents
@@ -145,6 +148,8 @@ In the sandbox, payouts can be redirected to a test account with the `PAYOUT_REC
 | AI | Gemini or Anthropic, selected by environment variable |
 | Validation | `zod` |
 | Auth | JWT bearer tokens, two roles (`CLIENT`, `WORKER`) |
+| Photo storage | Cloudinary (local disk fallback for development) |
+| Hosting | Render (Blueprint: web service and PostgreSQL) |
 
 ```mermaid
 flowchart LR
@@ -154,7 +159,7 @@ flowchart LR
   API -->|scope + photo check| AI[AI provider]
   API -->|authorize, capture, payout| PP[PayPal sandbox]
   C -->|approve once| PP
-  API --- FS[(server/uploads photos)]
+  API --- FS[(Cloudinary, or server/uploads locally)]
 ```
 
 ## 8. Getting started
@@ -168,7 +173,7 @@ flowchart LR
 ### 8.1 Install
 
 ```bash
-git clone <your-repo-url> Kazi-proof
+git clone https://github.com/LogicForge742/Kazi-proof.git Kazi-proof
 cd Kazi-proof
 (cd server && npm install)
 (cd web && npm install)
@@ -184,6 +189,8 @@ Create a `.env` file in the **project root** (the backend loads `../.env`). Neve
 | `AI_API_KEY` | Key for the chosen provider |
 | `AI_MODEL` | Model id from your provider, for example `gemini-3.6-flash` |
 | `PAYOUT_RECEIVER_EMAIL` | Optional. Sends sandbox payouts to this test account |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Photo storage. Optional locally, needed on Render |
+| `WEB_URL` | Public URL of the deployed app, used for the PayPal return address |
 | PayPal sandbox credentials | Client id and secret of your sandbox app. See `server/src/env.ts` for the exact names |
 | JWT secret | Signing key for login tokens. See `server/src/env.ts` for the exact name |
 
@@ -243,7 +250,7 @@ The repository includes a Render Blueprint in [`render.yaml`](render.yaml). It d
    - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` from your Cloudinary dashboard to keep uploaded proof photos across restarts. Keep the API secret private.
 4. Wait for the service to deploy. Render runs Prisma migrations on service startup.
 5. Open the service's `onrender.com` URL. Check `<your-service-url>/api/health`; the response should show `"ok": true` and `"db": true`.
-6. To create the demo users, open the service's **Shell** and run `npm run seed` from the `server` directory.
+6. The demo users are created automatically on every start (the start command runs the seed, which is safe to repeat).
 
 The Blueprint uses free plans for a demo. With Cloudinary configured, proof photos are stored remotely instead of on Render's ephemeral filesystem. Without Cloudinary, the app falls back to local uploads, which can disappear when the service restarts or redeploys. Cloudinary usage is subject to your account's current storage and bandwidth limits. Free PostgreSQL availability and retention are limited; check Render's current plan terms before relying on it.
 
@@ -254,8 +261,8 @@ PayPal stays in sandbox mode with this configuration. The known demo login crede
 **As the client**
 1. Sign in as `client@kazi.demo`.
 2. Click **+ New job**, describe the work and set a small budget (10 USD is enough for a test).
-3. Click **Preview payment plan** to see the AI's milestones. Regenerate if you want a different split.
-4. Click **Create job and pay with PayPal**. Log in with the sandbox Personal account and approve.
+3. Paste the job site location (coordinates or a Google Maps link), then click **Generate Milestones** to see the AI's milestones.
+4. Click **Confirm & Fund with PayPal**. Log in with the sandbox Personal account and approve.
 5. You are sent back to the app with "Funded. The worker can now start."
 
 **As the worker**
@@ -329,24 +336,28 @@ Summary:
 - [x] Job completion and a reputation event for the worker
 - [x] Authenticated photo route
 - [x] Full flow tested end to end on the PayPal sandbox
+- [x] Deployed on Render with a Blueprint, Render Postgres and Cloudinary photo storage
 
 ### Planned (not built)
+- [ ] **Reference-photo guidance.** Let clients upload a photo of the desired result and have AI use it alongside the written description to propose milestones and visual proof criteria. Later, compare each worker's proof photo against that same reference so clients can judge whether the result matches what they ordered. This is especially useful for clients paying from abroad who may find a design hard to describe in words.
 - [ ] **Photo authenticity checks.** Perceptual hashing (`phash`) to catch reused or stock photos, and EXIF checks. The database columns exist, but nothing fills them yet.
 - [ ] Worker reputation shown in the app. Events are recorded, but there is no screen or route to view them.
 - [ ] Auto-approval below a client-set limit (`autoApproveLimit` is stored but unused).
 - [ ] Challenge codes for live proof (`challengeCode` is stored but unused).
 - [ ] Real payments and local payout methods (for example mobile money). Today it is PayPal sandbox only.
 - [ ] Notifications (email or SMS) when proof is submitted or a payment is released.
-- [ ] Automated tests and a deployed demo.
+- [ ] Automated tests.
 
 ## 13. Known limitations
 
+- **No job board.** Jobs are assigned directly to a worker by email; workers cannot browse or claim open jobs.
+- **No self-service signup.** Only two demo accounts are available. **For judges:** Client — `client@kazi.demo` / `demo1234`; Worker — `worker@kazi.demo` / `demo1234`.
 - **Proof photos are not proof of authenticity.** The app captures photos live and records the time and available location at the shutter. A file-upload fallback exists and is clearly flagged. These checks raise the cost of cheating, but are not proof: device time and location can be spoofed, and a convincing photo may still pass. The client always makes the final approval.
 - **Sandbox only.** No real money moves.
 - **Single payout path.** Payouts go through PayPal and need the worker's PayPal email.
 - **Currency.** Jobs are created in USD by default.
 - **Budget cap.** The AI scoping endpoint accepts totals up to 5000.
-- **Local file storage.** Photos are saved on the server's disk under `server/uploads/`.
+- **Photo storage.** The hosted demo stores photos in Cloudinary. Without Cloudinary credentials (local development), photos are saved on the server's disk under `server/uploads/`.
 
 ## 14. Troubleshooting
 
@@ -358,9 +369,8 @@ Summary:
 | `Job has no PayPal authorization (not funded)` | The job was never funded through PayPal. Fund it from the app with **Pay with PayPal** |
 | Photo shows nothing in the browser | The photo route needs the auth header, so the app fetches it as a blob. A plain `<img src>` to the API does not work |
 | Submit button stays disabled | Choose a photo file first. Allow location if you want to avoid the `NO_LOCATION` flag |
-| Terminal prints garbage after a paste | Copy only the code inside the block, not lines that start with a prompt like `user@host:~$` |
 
 ## 15. Team and license
 
-- Team: hackathon team of three. Add names and roles here.
+- Team: Milton Ngeno (core build: backend, AI and PayPal integration, deployment) and Carlos Korir (styling and demo).
 - License: see [`LICENSE`](LICENSE).
